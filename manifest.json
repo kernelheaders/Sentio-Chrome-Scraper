@@ -10,16 +10,17 @@
   ],
   "host_permissions": [
     "https://api.sentio.com/*",
+    "http://localhost:3001/*",
     "https://www.sahibinden.com/*"
   ],
   "background": {
-    "service_worker": "src/background/service-worker.js",
+    "service_worker": "background/service-worker.js",
     "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["https://www.sahibinden.com/*"],
-      "js": ["src/content/scraper.js"],
+      "js": ["content/scraper.js"],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -28,17 +29,17 @@
     "default_popup": "src/popup/popup.html",
     "default_title": "Sentio Scraper",
     "default_icon": {
-      "16": "assets/icons/icon16.png",
-      "32": "assets/icons/icon32.png",
-      "48": "assets/icons/icon48.png",
-      "128": "assets/icons/icon128.png"
+      "16": "assets/icons/logo.png",
+      "32": "assets/icons/logo.png",
+      "48": "assets/icons/logo.png",
+      "128": "assets/icons/logo.png"
     }
   },
   "icons": {
-    "16": "assets/icons/icon16.png",
-    "32": "assets/icons/icon32.png",
-    "48": "assets/icons/icon48.png",
-    "128": "assets/icons/icon128.png"
+    "16": "assets/icons/logo.png",
+    "32": "assets/icons/logo.png",
+    "48": "assets/icons/logo.png",
+    "128": "assets/icons/logo.png"
   },
   "web_accessible_resources": [
     {
@@ -47,7 +48,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.sentio.com;"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.sentio.com http://localhost:3001 https://www.sahibinden.com;"
   },
   "minimum_chrome_version": "88"
 }

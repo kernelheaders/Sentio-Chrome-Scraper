@@ -12,14 +12,29 @@ A secure, server-mediated Chrome extension that operates exclusively as a lightw
 
 This Chrome extension is designed with **maximum user lock-in** and **central control** as core principles. Users cannot perform any scraping operations without API authorization, and all functionality is mediated by Sentio's central servers.
 
-### Key Features
+### ✅ **PRODUCTION-READY FEATURES** *(Successfully Tested)*
 
 - ✅ **API-Key Only Access** - Extension completely disabled without valid server API key
 - ✅ **Server-Controlled Jobs** - All scraping tasks defined and managed centrally
-- ✅ **Human-Like Behavior** - Sophisticated anti-detection with realistic user simulation
+- ✅ **Human-Like Browser Navigation** - Real clicking, scrolling, back navigation with proven anti-detection
+- ✅ **Contact Information Extraction** - Names, phone numbers, companies, addresses from property details
+- ✅ **Pagination Support** - Automatically handles multiple pages (tested with 30+ contacts)
+- ✅ **Strategic Timing** - Configurable speed profiles (Fast/Normal/Secure) with human-like delays
+- ✅ **Anti-Bot Protection** - Production-grade Cloudflare/blocking detection with auto-stop
 - ✅ **Zero Local Configuration** - No user-configurable settings in the extension
 - ✅ **Secure Data Flow** - All extracted data flows directly to central servers
 - ✅ **Manifest V3 Compliant** - Modern Chrome extension architecture
+
+### 🛡️ **Anti-Detection Features**
+
+- **Real Browser Automation**: Uses actual browser navigation, not background fetching
+- **Human-Like Timing**: 1.2-2.5 second delays between actions (configurable profiles)
+- **Mouse Movements**: Realistic mouse events and scrolling simulation
+- **Strategic Breaks**: 20-70 second breaks every 15 contacts to mimic human fatigue
+- **Variable Navigation**: Mix of history.back() and direct navigation (30% randomization)
+- **Login Detection**: Automatically stops if user authentication is required
+- **Rate Limit Protection**: Detects HTTP 429/439/403/503 errors and stops immediately
+- **Cloudflare Detection**: Monitors for challenge redirects, cookies, and Turnstile CAPTCHA
 
 ## 🏗️ Architecture
 

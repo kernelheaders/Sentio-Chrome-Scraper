@@ -7,12 +7,21 @@ import { generateAuthHeaders } from '../utils/crypto.js';
 import { secureStorage } from '../utils/storage.js';
 import { validateApiKey } from '../utils/validators.js';
 import { API_ENDPOINTS, CONFIG, ErrorCodes } from '../shared/types.js';
+import { config } from '../utils/config.js';
 
 export class ApiClient {
   constructor() {
-    this.baseUrl = 'https://api.sentio.com/v1';
+    this.baseUrl = config.apiBaseUrl;
     this.requestTimeout = CONFIG.REQUEST_TIMEOUT;
     this.maxRetries = CONFIG.MAX_RETRIES;
+    
+    // Log configuration for debugging
+    if (config.isDevelopment) {
+      logger.info('API Client initialized in development mode', {
+        baseUrl: this.baseUrl,
+        devMode: true
+      });
+    }
   }
 
   /**

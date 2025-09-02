@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js';
 import { secureStorage } from '../utils/storage.js';
 import { validateApiKey } from '../utils/validators.js';
 import { ErrorCodes } from '../shared/types.js';
+import { config } from '../utils/config.js';
 
 export class AuthManager {
   constructor(apiClient) {
@@ -14,6 +15,22 @@ export class AuthManager {
     this.lastValidation = null;
     this.validationCache = new Map();
     this.maxCacheAge = 5 * 60 * 1000; // 5 minutes
+  }
+
+  /**
+   * Get API key for development mode
+   */
+  async ensureDevApiKey() {
+    if (config.isDevelopment && config.devApiKey) {
+      const hasApiKey = await secureStorage.hasApiKey();
+      
+      if (!hasApiKey) {
+        logger.info('Auto-setting development API key');
+        await secureStorage.setApiKey(config.devApiKey);
+        return config.devApiKey;
+      }
+    }
+    return null;
   }
 
   /**

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Sentio Debug</title>
+    <style>
+        body { padding: 20px; width: 400px; font-family: Arial, sans-serif; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-left: 4px solid #007bff; }
+        .error { border-left-color: #dc3545; background: #ffebee; }
+        .success { border-left-color: #28a745; background: #e8f5e9; }
+        input { width: 100%; padding: 8px; margin: 5px 0; }
+        button { padding: 10px 20px; margin: 5px 0; }
+        #logs { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h3>Sentio Extension Debug</h3>
+    
+    <div>
+        <input type="text" id="apiKey" placeholder="Enter API key" />
+        <button id="validateBtn">Validate API Key</button>
+        <button id="testApiBtn">Use Test API Key</button>
+    </div>
+    
+    <div class="debug">
+        <strong>Status:</strong> <span id="status">Loading...</span>
+    </div>
+    
+    <div class="debug">
+        <strong>Debug Logs:</strong>
+        <div id="logs"></div>
+    </div>
+    
+    <script>
+        const apiKeyInput = document.getElementById('apiKey');
+        const validateBtn = document.getElementById('validateBtn');
+        const testApiBtn = document.getElementById('testApiBtn');
+        const statusSpan = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        
+        // Test API key
+        const TEST_API_KEY = 'test_api_key_12345678901234567890123456';
+        
+        // Logging function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.className = type;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(`[Popup Debug] ${message}`);
+        }
+        
+        // Test API key button
+        testApiBtn.addEventListener('click', () => {
+            apiKeyInput.value = TEST_API_KEY;
+            log('Test API key filled', 'success');
+        });
+        
+        // Validate button
+        validateBtn.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            
+            if (!apiKey) {
+                log('No API key entered', 'error');
+                return;
+            }
+            
+            log(`Attempting to validate API key: ${apiKey.substring(0, 10)}...`);
+            
+            try {
+                // First, test direct API call to mock server
+                log('Testing direct API call to localhost:3001...');
+                
+                const response = await fetch('http://localhost:3001/v1/auth/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'X-API-Key': apiKey
+                    }
+                });
+                
+                const data = await response.json();
+                log(`Direct API response: ${JSON.stringify(data)}`);
+                
+                if (data.valid) {
+                    log('✅ Direct API validation successful!', 'success');
+                    statusSpan.textContent = 'API key valid (direct test)';
+                    statusSpan.className = 'success';
+                } else {
+                    log('❌ Direct API validation failed', 'error');
+                    statusSpan.textContent = 'API key invalid (direct test)';
+                    statusSpan.className = 'error';
+                }
+                
+                // Now test via service worker
+                log('Testing via service worker...');
+                
+                const swResponse = await chrome.runtime.sendMessage({
+                    type: 'SET_API_KEY',
+                    apiKey: apiKey
+                });
+                
+                log(`Service worker response: ${JSON.stringify(swResponse)}`);
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error('Validation error:', error);
+            }
+        });
+        
+        // Initialize
+        log('Debug popup initialized');
+        statusSpan.textContent = 'Ready for testing';
+    </script>
+</body>
+</html>
