@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentio Scraper</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <img src="../assets/icons/icon32.png" alt="Sentio" class="logo-icon">
+                <span class="logo-text">Sentio Scraper</span>
+            </div>
+            <div class="status-indicator" id="statusIndicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Checking...</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Unauthorized State -->
+            <div id="unauthorizedState" class="state-panel">
+                <div class="state-content">
+                    <div class="info-icon">🔑</div>
+                    <h2>API Key Required</h2>
+                    <p>Enter your Sentio API key to get started. You can find your API key in your Sentio dashboard.</p>
+                    
+                    <form id="apiKeyForm" class="api-key-form">
+                        <div class="input-group">
+                            <label for="apiKeyInput" class="input-label">API Key</label>
+                            <input 
+                                type="password" 
+                                id="apiKeyInput" 
+                                class="api-key-input"
+                                placeholder="Enter your API key"
+                                required
+                                minlength="32"
+                                maxlength="128"
+                            >
+                            <button type="button" id="toggleApiKey" class="toggle-visibility" title="Show/Hide API Key">
+                                👁️
+                            </button>
+                        </div>
+                        
+                        <button type="submit" id="submitApiKey" class="submit-button">
+                            <span class="button-text">Connect</span>
+                            <div class="loading-spinner" id="submitSpinner"></div>
+                        </button>
+                    </form>
+
+                    <div class="help-links">
+                        <a href="https://app.sentio.com/dashboard" target="_blank" class="help-link">
+                            📊 Open Dashboard
+                        </a>
+                        <a href="https://docs.sentio.com/api-keys" target="_blank" class="help-link">
+                            ❓ Get API Key
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Authorized State -->
+            <div id="authorizedState" class="state-panel" style="display: none;">
+                <div class="state-content">
+                    <div class="connection-status">
+                        <div class="connection-info">
+                            <span class="connection-label">Connected</span>
+                            <span class="api-key-display" id="maskedApiKey">••••••••••••</span>
+                        </div>
+                        <button id="disconnectButton" class="disconnect-button" title="Disconnect">
+                            🔌
+                        </button>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="queuedJobs">0</div>
+                            <div class="stat-label">Queued Jobs</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="lastPoll">Never</div>
+                            <div class="stat-label">Last Poll</div>
+                        </div>
+                    </div>
+
+                    <div class="current-activity" id="currentActivity">
+                        <div class="activity-icon" id="activityIcon">💤</div>
+                        <div class="activity-text">
+                            <div class="activity-status" id="activityStatus">Idle</div>
+                            <div class="activity-details" id="activityDetails">Waiting for jobs...</div>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button id="forceRefreshButton" class="action-button">
+                            🔄 Check for Jobs
+                        </button>
+                        <button id="openDashboardButton" class="action-button">
+                            📊 Open Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="state-panel error-panel" style="display: none;">
+                <div class="state-content">
+                    <div class="error-icon">⚠️</div>
+                    <h2>Connection Error</h2>
+                    <p id="errorMessage">Unable to connect to Sentio servers.</p>
+                    
+                    <div class="error-actions">
+                        <button id="retryButton" class="retry-button">
+                            🔄 Retry Connection
+                        </button>
+                        <button id="resetButton" class="reset-button">
+                            🔑 Enter New API Key
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-links">
+                <a href="https://sentio.com/support" target="_blank" class="footer-link">Support</a>
+                <a href="https://sentio.com/privacy" target="_blank" class="footer-link">Privacy</a>
+                <span class="version">v1.0.0</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Context Menu (if needed) -->
+    <div id="contextMenu" class="context-menu" style="display: none;">
+        <div class="context-item" id="copyApiKey">Copy API Key</div>
+        <div class="context-item" id="clearStorage">Clear All Data</div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
