@@ -1,8 +1,8 @@
 # Sentio Chrome Extension
 
-> **API-Driven Chrome Extension for Centrally Managed Sahibinden.com Scraping**
+> **🏆 Complete Standalone Chrome Extension for Professional Sahibinden.com Contact Extraction**
 
-A secure, server-mediated Chrome extension that operates exclusively as a lightweight client for centrally managed web scraping operations. All job configuration, scheduling, and data management are performed through Sentio's central web platform, ensuring maximum control and compliance.
+A production-ready Chrome extension for extracting contact information from Sahibinden.com property listings. Features human-like navigation, comprehensive contact extraction, and professional CSV export capabilities. Designed for real estate professionals and lead generation services.
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-green)](https://chrome.google.com/webstore)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)](https://developer.chrome.com/docs/extensions/mv3/)
@@ -12,18 +12,35 @@ A secure, server-mediated Chrome extension that operates exclusively as a lightw
 
 This Chrome extension is designed with **maximum user lock-in** and **central control** as core principles. Users cannot perform any scraping operations without API authorization, and all functionality is mediated by Sentio's central servers.
 
-### ✅ **PRODUCTION-READY FEATURES** *(Successfully Tested)*
+### 🏆 **COMPLETE PRODUCTION-READY FEATURES** *(Successfully Tested)*
 
-- ✅ **API-Key Only Access** - Extension completely disabled without valid server API key
-- ✅ **Server-Controlled Jobs** - All scraping tasks defined and managed centrally
-- ✅ **Human-Like Browser Navigation** - Real clicking, scrolling, back navigation with proven anti-detection
-- ✅ **Contact Information Extraction** - Names, phone numbers, companies, addresses from property details
-- ✅ **Pagination Support** - Automatically handles multiple pages (tested with 30+ contacts)
-- ✅ **Strategic Timing** - Configurable speed profiles (Fast/Normal/Secure) with human-like delays
-- ✅ **Anti-Bot Protection** - Production-grade Cloudflare/blocking detection with auto-stop
-- ✅ **Zero Local Configuration** - No user-configurable settings in the extension
-- ✅ **Secure Data Flow** - All extracted data flows directly to central servers
-- ✅ **Manifest V3 Compliant** - Modern Chrome extension architecture
+#### 🎯 **Core Functionality**
+- ✅ **API-Key Authentication** - Secure activation with "TEST" key for development
+- ✅ **Human-Like Navigation** - Real browser clicking, scrolling, back navigation
+- ✅ **Contact Information Extraction** - Names, phone numbers, companies, addresses
+- ✅ **Dual Extraction Logic** - Handles both real estate agencies and individual owners
+- ✅ **Smart Completion** - Automatically stops when target reached or no more ads
+- ✅ **URL Deduplication** - Prevents visiting same ads multiple times
+
+#### 🎮 **User Control Features**
+- ✅ **Start/Pause/Resume/Reset** - Complete job control during extraction
+- ✅ **Speed Profiles** - Fast/Normal/Secure timing configurations
+- ✅ **Contact Count Selection** - 3, 5, 10, 20, or 50 contacts
+- ✅ **Progress Tracking** - Real-time extraction progress display
+- ✅ **Persistent State** - Jobs continue across browser tab switches
+
+#### 📄 **CSV Export System**
+- ✅ **Customizable Field Selection** - Choose which data to export
+- ✅ **Professional CSV Format** - Proper formatting with quotes and escaping
+- ✅ **Required Fields** - Phone (mandatory), Name, From (Agency/Owner), Address
+- ✅ **Optional Fields** - Property Title, Price, Ad Date, Property URL
+- ✅ **Automatic Download** - One-click CSV download to user's computer
+
+#### 🛡️ **Advanced Anti-Detection**
+- ✅ **Context Invalidation Protection** - Handles Chrome extension development issues
+- ✅ **Login Detection** - Stops if user authentication required
+- ✅ **JavaScript Protection Bypass** - Extracts phone numbers from protected elements
+- ✅ **Smart Navigation** - Mix of history.back() and direct navigation
 
 ### 🛡️ **Anti-Detection Features**
 
