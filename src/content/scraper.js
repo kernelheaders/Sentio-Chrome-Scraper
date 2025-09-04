@@ -43,8 +43,7 @@ class SentioContentScript {
 
       // Apply human-like behaviors
       this.humanSimulator.startBackgroundActivity();
-      // Setup lightweight on-page HUD
-      this.initHud();
+      // HUD will be created lazily only when a job starts or resumes
 
       // Signal that content script is ready
       this.sendMessage(MessageTypes.HEALTH_RESPONSE, {
@@ -53,11 +52,10 @@ class SentioContentScript {
         timestamp: Date.now()
       });
 
-      // Global/DOM block signals early
+      // Global/DOM block signals early — no HUD splash while idle
       try {
         const blocked = await this.isGloballyBlocked();
         if (blocked || this.isLikelyBlockedPage()) {
-          this.updateHud({ status: 'Paused (429/CHLG)', progress: 0, total: 0 });
           this.sendMessage(MessageTypes.BLOCK_DETECTED, { reason: blocked ? 'Global block' : 'DOM block', url: window.location.href });
           try { await this.clearDetailProgress(); } catch (_) {}
           return;
@@ -158,6 +156,9 @@ class SentioContentScript {
         url: window.location.href
       });
 
+      // Ensure HUD is visible for job progress
+      this.initHud();
+
       // For detail workflows, orchestrate across navigations
       if (job.type === 'scrape_details' || job.config?.followDetails) {
         this.updateHud({ status: 'Starting…' });
@@ -198,6 +199,8 @@ class SentioContentScript {
    */
   async startDetailWorkflow(job) {
     const config = job.config || {};
+    // Lazily ensure HUD exists
+    this.initHud();
     // Prefer direct URLs if provided, else collect from listing page
     let urls = [];
     try {
@@ -240,6 +243,8 @@ class SentioContentScript {
     try {
       const progress = await this.loadDetailProgress();
       if (!progress || !progress.urls || progress.urls.length === 0) return;
+      // Ensure HUD exists when resuming
+      this.initHud();
 
       // Stop if blocked
       try {
@@ -647,6 +652,7 @@ class SentioContentScript {
       await this.waitForPageReady();
 
       // Execute the actual scraping logic
+      this.initHud();
       try { this.updateHud({ status: 'Processing', progress: 0, total: 1 }); } catch (_) {}
       const extractedData = await this.jobExecutor.execute(job);
 
