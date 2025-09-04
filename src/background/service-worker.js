@@ -180,11 +180,20 @@ class ServiceWorker {
           sendResponse({ success: true });
           break;
 
-        case MessageTypes.BLOCK_DETECTED:
-          logger.logSecurityEvent('Block detected by content script', message.payload || {});
-          await this.enterBlock();
+        case MessageTypes.BLOCK_DETECTED: {
+          const payload = message.payload || {};
+          const reason = String(payload.reason || '').toLowerCase();
+          const isExecuting = this.currentState === ExtensionState.EXECUTING || !!this.jobManager?.currentJob;
+          const domOnly = reason.includes('dom') || reason.includes('unexpected') || reason.includes('listing') || reason.includes('detail');
+          // Only enter backoff if we were actively executing (real scrape) or if webRequest caught 429/CHLG.
+          if (isExecuting && !domOnly) {
+            logger.logSecurityEvent('Block detected during execution; entering backoff', payload);
+            await this.enterBlock();
+          } else {
+            logger.warn('DOM block signal received while idle/not executing; ignoring backoff', payload);
+          }
           sendResponse({ success: true });
-          break;
+          break; }
 
         case MessageTypes.GET_DEV_KEY:
           try {
