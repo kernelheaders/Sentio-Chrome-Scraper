@@ -52,6 +52,13 @@ class ServiceWorker {
       // Warm up API connection and attempt an immediate poll
       await this.warmupApi();
       await this.pollForJobs();
+
+      // Ensure periodic polling is active when API key is present and not blocked
+      try {
+        if (await secureStorage.hasApiKey() && !this.isBlocked()) {
+          await this.startPolling();
+        }
+      } catch (_) {}
       
       logger.info('Service worker initialized successfully');
     } catch (error) {

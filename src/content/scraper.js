@@ -159,6 +159,12 @@ class SentioContentScript {
       // Ensure HUD is visible for job progress
       this.initHud();
 
+      // If we have a target listing URL, optionally warm up on homepage first
+      try {
+        const target = job?.config?.url;
+        if (target) await this.navigateHomeThen(target);
+      } catch (_) {}
+
       // For detail workflows, orchestrate across navigations
       if (job.type === 'scrape_details' || job.config?.followDetails) {
         this.updateHud({ status: 'Starting…' });
@@ -201,6 +207,11 @@ class SentioContentScript {
     const config = job.config || {};
     // Lazily ensure HUD exists
     this.initHud();
+
+    // Always land on homepage first, then the listing URL for a human-like flow
+    try {
+      if (config.url) await this.navigateHomeThen(config.url);
+    } catch (_) {}
     // Prefer direct URLs if provided, else collect from listing page
     let urls = [];
     try {
@@ -643,9 +654,9 @@ class SentioContentScript {
       // Apply anti-detection measures
       await this.antiDetection.beforeJobExecution();
 
-      // Navigate to target URL if needed
-      if (job.config.url && job.config.url !== window.location.href) {
-        await this.navigateToUrl(job.config.url);
+      // Navigate via homepage warmup if target provided
+      if (job.config.url) {
+        await this.navigateHomeThen(job.config.url);
       }
 
       // Wait for page to be ready
@@ -733,6 +744,28 @@ class SentioContentScript {
     } catch (error) {
       logger.error('Navigation failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Navigate to homepage first, then the target URL (human-like entry)
+   */
+  async navigateHomeThen(targetUrl) {
+    try {
+      const home = 'https://www.sahibinden.com/';
+      const here = window.location.href;
+      const onHome = () => {
+        try { const u = new URL(here); return u.hostname.endsWith('sahibinden.com') && (u.pathname === '/' || u.pathname === ''); } catch { return false; }
+      };
+      if (!onHome()) {
+        await this.navigateToUrl(home);
+        try { await this.humanSimulator.randomDelay(600, 1400); } catch (_) {}
+      }
+      if (targetUrl && window.location.href !== targetUrl) {
+        await this.navigateToUrl(targetUrl);
+      }
+    } catch (e) {
+      logger.debug('navigateHomeThen failed: ' + (e?.message || e));
     }
   }
 
