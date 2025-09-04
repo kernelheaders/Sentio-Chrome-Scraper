@@ -62,7 +62,11 @@ class SentioPopup {
         apiKeyInput.type = 'text';
         // Auto-submit the test key
         const setRes = await this.sendMessage(MessageTypes.SET_API_KEY, { apiKey: key });
-        if (setRes?.success) {
+        // Treat transient port errors as benign; verify via status after a short wait
+        await new Promise(r => setTimeout(r, 150));
+        const status = await this.sendMessage(MessageTypes.GET_STATUS);
+        const connected = status && status.success !== false && (status.hasApiKey === true || (status.state && status.state !== undefined && status.state !== 'unauthorized'));
+        if (setRes?.success || connected) {
           this.showToast('Test key set', 'success');
           await this.loadStatus();
         } else {

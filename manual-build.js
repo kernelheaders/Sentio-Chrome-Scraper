@@ -51,6 +51,7 @@ const filesToCopy = [
   { from: 'src/content/dom-extractor.js', to: 'build/content/dom-extractor.js' },
   { from: 'src/content/human-simulator.js', to: 'build/content/human-simulator.js' },
   { from: 'src/content/job-executor.js', to: 'build/content/job-executor.js' },
+  { from: 'src/content/loader.js', to: 'build/content/loader.js' },
   
   { from: 'src/utils/config.js', to: 'build/utils/config.js' },
   { from: 'src/utils/crypto.js', to: 'build/utils/crypto.js' },

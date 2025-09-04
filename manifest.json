@@ -26,7 +26,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.sahibinden.com/*"],
-      "js": ["content/scraper.js"],
+      "js": ["content/loader.js"],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -49,7 +49,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/content/*"],
+      "resources": [
+        "content/*.js",
+        "utils/*.js",
+        "shared/*.js"
+      ],
       "matches": ["https://www.sahibinden.com/*"]
     }
   ],
