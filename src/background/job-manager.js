@@ -35,7 +35,7 @@ export class JobManager {
       // Try to inject on first failure
       if (attempt === 1) {
         try {
-          await chrome.scripting.executeScript({ target: { tabId }, files: ['content/scraper.js'] });
+          await chrome.scripting.executeScript({ target: { tabId }, files: ['content/loader.js'] });
         } catch (injErr) {
           logger.debug('Content script injection error:', injErr?.message || injErr);
         }
