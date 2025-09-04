@@ -38,6 +38,8 @@ export const MessageTypes = {
 
   // Popup ↔ Service Worker (CSV/export)
   GET_LAST_RESULT: 'get_last_result',
+  CLEAR_LOCAL_STATE: 'clear_local_state',
+  GET_DEBUG_STATE: 'get_debug_state',
 
   // Dev helper
   GET_DEV_KEY: 'get_dev_key',

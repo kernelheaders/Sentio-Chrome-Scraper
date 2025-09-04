@@ -100,6 +100,24 @@ class SentioPopup {
     const openDashboardButton = document.getElementById('openDashboardButton');
     openDashboardButton?.addEventListener('click', this.handleOpenDashboard.bind(this));
 
+    const resetLocalButton = document.getElementById('resetLocalButton');
+    resetLocalButton?.addEventListener('click', async () => {
+      this.setButtonLoading(resetLocalButton, true);
+      try {
+        const r = await this.sendMessage(MessageTypes.CLEAR_LOCAL_STATE);
+        if (r?.success) {
+          this.showToast('Local cache cleared', 'success');
+          // Trigger a fresh poll
+          await this.tryForcePoll(2);
+          await this.loadStatus();
+        } else {
+          this.showToast('Failed to clear cache', 'error');
+        }
+      } finally {
+        this.setButtonLoading(resetLocalButton, false);
+      }
+    });
+
     // Export CSV (compact menu)
     const exportBtn = document.getElementById('exportCsvButton');
     exportBtn?.addEventListener('click', this.toggleExportMenu.bind(this));

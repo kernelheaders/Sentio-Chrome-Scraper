@@ -178,6 +178,36 @@ class ServiceWorker {
           }
           break;
 
+        case MessageTypes.CLEAR_LOCAL_STATE:
+          try {
+            // Clear local caches but keep API key
+            await secureStorage.clearBlockedUntil();
+            await secureStorage.clearLastResult();
+            await secureStorage.clearJobQueue();
+            try { await new Promise((r)=> chrome.storage.local.remove([CONFIG.STORAGE_KEYS.DETAIL_PROGRESS], ()=> r())); } catch(_){}
+            this.jobManager.currentJob = null;
+            this.jobManager.jobQueue = [];
+            await this.setState(ExtensionState.IDLE);
+            await this.startPolling();
+            sendResponse({ success: true });
+          } catch (e) {
+            sendResponse({ success: false, error: e?.message || 'Failed to clear local state' });
+          }
+          break;
+
+        case MessageTypes.GET_DEBUG_STATE:
+          try {
+            const blockedUntil = this.blockedUntil;
+            const hasApiKey = await secureStorage.hasApiKey();
+            const lastPoll = await secureStorage.getLastPoll();
+            const queue = await this.jobManager.getPendingJobs();
+            const currentJob = this.jobManager.currentJob || null;
+            sendResponse({ success: true, state: this.currentState, blockedUntil, hasApiKey, lastPoll, queueSize: queue.length, currentJob });
+          } catch (e) {
+            sendResponse({ success: false, error: e?.message || 'Failed to get debug state' });
+          }
+          break;
+
         case MessageTypes.GET_BLOCK_STATUS:
           sendResponse({ success: true, blockedUntil: this.blockedUntil });
           break;

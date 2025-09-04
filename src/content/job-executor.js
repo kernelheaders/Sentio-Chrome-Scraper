@@ -332,6 +332,7 @@ export class JobExecutor {
         for (const sel of candidateSelectors) {
           try {
             const nodes = document.querySelectorAll(sel);
+            logger.debug(`[executor.collect] selector=${sel} count=${nodes.length}`);
             for (const a of nodes) {
               const href = a.getAttribute('href');
               if (!href) continue;
@@ -349,6 +350,7 @@ export class JobExecutor {
       }
 
       if (urls.length === 0) {
+        logger.debug('[executor.collect] fallback to extractListingsFromPage');
         // Fallback: use listing extraction to derive URLs
         try {
           const pageResults = await this.extractListingsFromPage(config);

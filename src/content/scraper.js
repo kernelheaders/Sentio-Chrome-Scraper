@@ -207,18 +207,22 @@ class SentioContentScript {
     const config = job.config || {};
     // Lazily ensure HUD exists
     this.initHud();
+    logger.debug(`[flow] startDetailWorkflow: target=${config.url}`);
 
     // Always land on homepage first, then the listing URL for a human-like flow
     try {
       if (config.url) await this.navigateHomeThen(config.url);
-    } catch (_) {}
+      logger.debug('[flow] navigated to listing page');
+    } catch (e) { logger.debug('[flow] navigateHomeThen error: ' + (e?.message || e)); }
 
     // Ensure listing content is present before collecting links
     try {
       const listingSel = config.selectors?.listingContainer || '.searchResultsItem';
+      logger.debug(`[flow] waiting listing container: ${listingSel}`);
       try { await this.waitForContent(listingSel, 20000); }
       catch { await this.waitForContent('a[href*="/ilan/"]', 20000); }
-    } catch (_) {}
+      logger.debug('[flow] listing container detected');
+    } catch (e) { logger.debug('[flow] wait listing failed: ' + (e?.message || e)); }
     // Prefer direct URLs if provided, else collect from listing page
     let urls = [];
     try {
@@ -228,6 +232,7 @@ class SentioContentScript {
         urls = await this.collectDetailLinks(config);
       }
     } catch (_) { urls = await this.collectDetailLinks(config); }
+    logger.debug(`[flow] collected links: ${urls.length}`);
     const maxItems = config.maxItems || 10;
     const slice = urls.slice(0, maxItems);
     const progress = {
@@ -261,6 +266,7 @@ class SentioContentScript {
     try {
       const progress = await this.loadDetailProgress();
       if (!progress || !progress.urls || progress.urls.length === 0) return;
+      logger.debug(`[resume] loaded progress: idx=${progress.index} total=${progress.urls.length}`);
       // Ensure HUD exists when resuming
       this.initHud();
 
@@ -307,6 +313,7 @@ class SentioContentScript {
       };
 
       if (isSameDetail(here, currentTarget)) {
+        logger.debug('[resume] on expected detail page');
         // On expected detail: human pause + extract
         if (this.isLikelyBlockedPage()) {
           this.sendMessage(MessageTypes.BLOCK_DETECTED, { reason: 'Blocked on detail', url: here });
@@ -340,6 +347,7 @@ class SentioContentScript {
         const nextIndex = index + 1;
         await this.persistDetailProgress({ ...progress, results, index: nextIndex });
         this.updateHud({ status: 'Processing', progress: nextIndex, total: urls.length });
+        logger.debug(`[resume] moving to next: ${nextIndex}/${urls.length}`);
 
         // Always return to listing, then perform progressive scroll based on index, then go next
         const nextUrl = urls[nextIndex];
@@ -351,6 +359,7 @@ class SentioContentScript {
           } catch (_) {}
           await this.humanSimulator.randomDelay(500, 1200);
           await this.navigateToUrl(nextUrl);
+          logger.debug('[resume] navigated to next detail');
         } else {
           const finalResult = this.buildResult({ id: jobId, token }, results);
           try { await secureStorage.setLastResult(finalResult); } catch (_) {}
@@ -364,6 +373,7 @@ class SentioContentScript {
 
       // If on listing page and not done, go to current target
       if (here.startsWith(listingUrl) && currentTarget) {
+        logger.debug('[resume] on listing page, moving to current target');
         if (this.isLikelyBlockedPage()) {
           this.sendMessage(MessageTypes.BLOCK_DETECTED, { reason: 'Blocked on listing', url: here });
           logger.warn('BLOCK DETECTED on listing page; pausing flow');
@@ -380,6 +390,7 @@ class SentioContentScript {
         logger.warn('BLOCK DETECTED (unexpected page); pausing');
         return;
       }
+      logger.debug('[resume] unexpected page; steering back to listing');
       await this.navigateToUrl(listingUrl);
       return;
     } catch (_) {}
@@ -515,6 +526,7 @@ class SentioContentScript {
         for (const sel of sels) {
           try {
             const nodes = document.querySelectorAll(sel);
+            logger.debug(`[collect] selector=${sel} count=${nodes.length}`);
             for (const a of nodes) {
               const href = a.getAttribute('href');
               if (!href) continue;
@@ -536,6 +548,7 @@ class SentioContentScript {
 
       if (urls.length === 0) {
         // Fallback: use existing listing extraction
+        logger.debug('[collect] fallback to extractListingsFromPage');
         const pageResults = await this.jobExecutor.extractListingsFromPage(config);
         for (const item of pageResults) {
           if (item?.url) {
