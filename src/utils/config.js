@@ -35,6 +35,13 @@ export const getDevApiKey = () => {
   return null;
 };
 
+export const getDevLogEndpoint = () => {
+  if (isDevelopment()) {
+    return 'http://127.0.0.1:3001/v1/dev/logs';
+  }
+  return null;
+};
+
 // Get polling interval based on environment
 export const getPollingInterval = () => {
   if (isDevelopment()) {
@@ -47,5 +54,6 @@ export const config = {
   isDevelopment: isDevelopment(),
   apiBaseUrl: getApiBaseUrl(),
   devApiKey: getDevApiKey(),
-  pollingInterval: getPollingInterval()
+  pollingInterval: getPollingInterval(),
+  devLogEndpoint: getDevLogEndpoint()
 };

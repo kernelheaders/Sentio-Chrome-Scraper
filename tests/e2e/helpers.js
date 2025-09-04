@@ -10,6 +10,7 @@ export async function launchWithExtension(testInfo) {
   const userDataDir = path.resolve('.pw-user');
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
+    channel: 'chrome',
     args: [
       `--disable-extensions-except=${buildPath}`,
       `--load-extension=${buildPath}`
@@ -21,6 +22,15 @@ export async function launchWithExtension(testInfo) {
 
   // First page might be blank; open a tab to have a handle
   const [page] = context.pages().length ? context.pages() : [await context.newPage()];
+  hookPageLogging(page, testInfo);
+  return { context, page };
+}
+
+export async function connectToExistingChrome(testInfo, cdpUrl = 'http://127.0.0.1:9222') {
+  const context = await chromium.connectOverCDP(cdpUrl);
+  context.on('page', (p) => hookPageLogging(p, testInfo));
+  const pages = context.pages();
+  const page = pages.length ? pages[0] : await context.newPage();
   hookPageLogging(page, testInfo);
   return { context, page };
 }
@@ -110,4 +120,3 @@ export async function waitForDetailPage(context, timeoutMs = 120_000) {
 function isDetailUrl(u) {
   try { return /https?:\/\/www\.sahibinden\.com\/.+\/ilan\//.test(u) || /\/ilan\//.test(new URL(u).pathname); } catch { return false; }
 }
-

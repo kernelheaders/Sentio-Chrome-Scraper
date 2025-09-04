@@ -16,6 +16,11 @@ class Logger {
     const env = (typeof process !== 'undefined' && process?.env?.NODE_ENV) || 'development';
     this.currentLevel = env === 'production' ? LOG_LEVELS.ERROR : LOG_LEVELS.DEBUG;
     this.isDevelopment = env !== 'production';
+    try {
+      // Lazy import to avoid circular deps
+      const cfgMod = requireLike('../utils/config.js');
+      this.devLogEndpoint = cfgMod?.config?.devLogEndpoint || null;
+    } catch (_) { this.devLogEndpoint = null; }
   }
 
   /**
@@ -43,6 +48,7 @@ class Logger {
       } else {
         console.error(formatted);
       }
+      this.forwardDevLog('ERROR', message, context);
     }
   }
 
@@ -57,6 +63,7 @@ class Logger {
       } else {
         console.warn(formatted);
       }
+      this.forwardDevLog('WARN', message, context);
     }
   }
 
@@ -71,6 +78,7 @@ class Logger {
       } else {
         console.info(formatted);
       }
+      this.forwardDevLog('INFO', message, context);
     }
   }
 
@@ -85,6 +93,7 @@ class Logger {
       } else {
         console.debug(formatted);
       }
+      this.forwardDevLog('DEBUG', message, context);
     }
   }
 
@@ -163,7 +172,42 @@ class Logger {
       this.currentLevel = LOG_LEVELS[level];
     }
   }
+
+  forwardDevLog(level, message, context = null) {
+    try {
+      if (!this.isDevelopment || !this.devLogEndpoint) return;
+      const source = typeof window !== 'undefined' && window?.location ? 'content' : 'background';
+      const payload = {
+        level,
+        message,
+        context,
+        source,
+        url: (typeof window !== 'undefined' && window?.location?.href) ? window.location.href : undefined,
+        ts: Date.now()
+      };
+      // Prefer sendBeacon in content; fetch in worker
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon(this.devLogEndpoint, blob);
+      } else {
+        fetch(this.devLogEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true })
+          .catch(() => {});
+      }
+    } catch (_) {}
+  }
 }
 
 // Create singleton instance
 export const logger = new Logger();
+
+// Simple CommonJS-like require for ESM context (best-effort)
+function requireLike(relPath) {
+  try {
+    // eslint-disable-next-line no-new-func
+    const req = new Function('path', 'return import(path)');
+    // Dynamic import cannot be sync; return undefined if unavailable
+    return undefined;
+  } catch (_) {
+    return undefined;
+  }
+}

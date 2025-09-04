@@ -547,6 +547,24 @@ export class JobExecutor {
       // Price: prefer classified-price-wrapper, fallback priceContainer
       const rawPrice = this.domExtractor.extractText(document, selectors.detailPrice || '.classified-price-wrapper, .priceContainer');
       data.price = this.parsePrice(rawPrice);
+      if (!data.price) {
+        try {
+          const metaPrice = document.querySelector('meta[property="product:price:amount"], meta[itemprop="price"], meta[property="og:price:amount"]');
+          const mVal = metaPrice?.getAttribute('content');
+          const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).map(s=>s.textContent||'').join('\n');
+          let jsonPrice = null;
+          try {
+            const blocks = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+            for (const b of blocks) {
+              const obj = JSON.parse(b.textContent||'{}');
+              const offers = obj?.offers || obj?.aggregateOffer || null;
+              if (offers) { jsonPrice = offers.price || offers.lowPrice || offers.highPrice; if (jsonPrice) break; }
+            }
+          } catch(_) {}
+          const anyP = mVal || jsonPrice;
+          if (anyP) data.price = this.parsePrice(String(anyP));
+        } catch(_) {}
+      }
       data.description = this.domExtractor.extractText(document, selectors.description || '.classifiedDescription');
 
       // Extract property details table

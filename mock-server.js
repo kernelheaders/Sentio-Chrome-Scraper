@@ -46,6 +46,7 @@ let mockJobs = [
 
 // Mock results storage
 let jobResults = [];
+let devLogs = [];
 
 // Middleware to check API key
 const validateApiKey = (req, res, next) => {
@@ -126,6 +127,33 @@ app.get('/v1/jobs/results', validateApiKey, (req, res) => {
     results: jobResults,
     count: jobResults.length
   });
+});
+
+// Dev log sink (optional)
+app.post('/v1/dev/logs', (req, res) => {
+  try {
+    const payload = req.body;
+    const arr = Array.isArray(payload) ? payload : [payload];
+    arr.forEach((e) => {
+      const entry = {
+        ts: new Date().toISOString(),
+        ...e
+      };
+      devLogs.push(entry);
+      // Print concise line to server console
+      const src = entry.source || 'unknown';
+      const lvl = entry.level || 'LOG';
+      const msg = entry.message || JSON.stringify(entry).slice(0, 200);
+      console.log(`📝 [${src}] [${lvl}] ${msg}`);
+    });
+    res.json({ success: true, received: arr.length, total: devLogs.length });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e?.message || 'invalid log payload' });
+  }
+});
+
+app.get('/v1/dev/logs', (req, res) => {
+  res.json({ logs: devLogs.slice(-1000), count: devLogs.length });
 });
 
 // Add new job (for testing)
