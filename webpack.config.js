@@ -49,11 +49,11 @@ export default (env, argv) => {
           },
           { 
             from: 'src/popup/popup.html', 
-            to: 'src/popup/popup.html' 
+            to: 'popup/popup.html' 
           },
           { 
             from: 'src/popup/popup.css', 
-            to: 'src/popup/popup.css' 
+            to: 'popup/popup.css' 
           },
           { 
             from: 'assets/', 

@@ -6,12 +6,18 @@
   "permissions": [
     "storage",
     "alarms",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "tabs",
+    "webRequest",
+    "notifications"
   ],
   "host_permissions": [
     "https://api.sentio.com/*",
     "http://localhost:3001/*",
-    "https://www.sahibinden.com/*"
+    "http://127.0.0.1:3001/*",
+    "https://www.sahibinden.com/*",
+    "https://*.sahibinden.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
@@ -26,7 +32,7 @@
     }
   ],
   "action": {
-    "default_popup": "src/popup/popup.html",
+    "default_popup": "popup/popup.html",
     "default_title": "Sentio Scraper",
     "default_icon": {
       "16": "assets/icons/logo.png",
@@ -48,7 +54,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.sentio.com http://localhost:3001 https://www.sahibinden.com;"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.sentio.com http://localhost:3001 http://127.0.0.1:3001 https://www.sahibinden.com;"
   },
   "minimum_chrome_version": "88"
 }

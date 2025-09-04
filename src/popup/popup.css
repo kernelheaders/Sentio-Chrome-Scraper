@@ -176,6 +176,19 @@ body {
     background: rgba(0, 0, 0, 0.05);
 }
 
+.dev-helper {
+    text-align: right;
+    margin: -8px 0 12px 0;
+}
+
+.use-test-key {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 12px;
+    cursor: pointer;
+}
+
 .submit-button {
     position: relative;
     width: 100%;
@@ -513,6 +526,72 @@ body {
 
 .context-item:hover {
     background: #f3f4f6;
+}
+
+/* Export CSV compact UI */
+.export-section {
+    position: relative;
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.export-button {
+    padding: 8px 12px;
+    font-size: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.export-button:hover {
+    background: #f9fafb;
+}
+
+.export-menu {
+    position: absolute;
+    right: 0;
+    top: 36px;
+    width: 240px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 10px;
+    z-index: 1000;
+}
+
+.export-title {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.export-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    margin-bottom: 8px;
+}
+
+.export-fields label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #374151;
+}
+
+.export-apply {
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    font-size: 12px;
+    cursor: pointer;
 }
 
 /* Responsive Design */

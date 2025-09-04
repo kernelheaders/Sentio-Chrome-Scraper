@@ -17,10 +17,7 @@ export class ApiClient {
     
     // Log configuration for debugging
     if (config.isDevelopment) {
-      logger.info('API Client initialized in development mode', {
-        baseUrl: this.baseUrl,
-        devMode: true
-      });
+      logger.info('API Client initialized in development mode', { baseUrl: this.baseUrl, devMode: true });
     }
   }
 
@@ -39,10 +36,8 @@ export class ApiClient {
     const body = options.body || null;
     
     // Generate authentication headers
-    const headers = {
-      ...generateAuthHeaders(apiKey, method, url, body),
-      ...options.headers
-    };
+    const authHeaders = await generateAuthHeaders(apiKey, method, url, body);
+    const headers = { ...authHeaders, ...options.headers };
 
     const requestOptions = {
       method,
@@ -79,6 +74,7 @@ export class ApiClient {
       }
       
       if (error.name === 'TypeError') {
+        logger.warn('Network error during fetch:', { message: error.message });
         throw new Error(ErrorCodes.NETWORK_ERROR);
       }
       
@@ -155,7 +151,18 @@ export class ApiClient {
    */
   async validateApiKey(apiKey) {
     try {
-      // First validate format locally
+      // In development mode, accept configured dev key without server call
+      if (config.isDevelopment && config.devApiKey && apiKey === config.devApiKey) {
+        logger.info('Development API key accepted without server validation');
+        try {
+          await secureStorage.setApiKey(apiKey);
+        } catch (e) {
+          logger.warn('Failed to persist dev API key:', e?.message || e);
+        }
+        return true;
+      }
+
+      // Otherwise validate format locally
       const validation = validateApiKey(apiKey);
       if (!validation.isValid) {
         logger.warn('API key format invalid:', validation.errors);
@@ -274,6 +281,11 @@ export class ApiClient {
    */
   async reportMetrics(metrics) {
     try {
+      // Skip metrics reporting in development / mock mode
+      if (config?.isDevelopment) {
+        logger.debug('Skipping metrics reporting in development');
+        return;
+      }
       await this.makeRequest('/metrics', {
         method: 'POST',
         body: metrics

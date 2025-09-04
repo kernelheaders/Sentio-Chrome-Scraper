@@ -17,6 +17,41 @@ export class JobManager {
   }
 
   /**
+   * Send execute message with safe injection + retries
+   */
+  async sendExecuteMessage(tabId, job, attempt = 1) {
+    const maxAttempts = 5;
+    const delay = 200 * attempt; // 200ms, 400ms, ...
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: MessageTypes.EXECUTE_JOB,
+        payload: { job, timestamp: Date.now() }
+      });
+      if (!response || response.success !== true) {
+        logger.debug(`Execute ACK not received (attempt ${attempt}) for job ${job.id}`);
+      }
+      return true;
+    } catch (err) {
+      // Try to inject on first failure
+      if (attempt === 1) {
+        try {
+          await chrome.scripting.executeScript({ target: { tabId }, files: ['content/scraper.js'] });
+        } catch (injErr) {
+          logger.debug('Content script injection error:', injErr?.message || injErr);
+        }
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, delay));
+        return this.sendExecuteMessage(tabId, job, attempt + 1);
+      }
+
+      logger.warn(`Failed to deliver execute message after ${maxAttempts} attempts for job ${job.id}`);
+      return false;
+    }
+  }
+
+  /**
    * Fetch pending jobs from API
    */
   async fetchPendingJobs() {
@@ -54,6 +89,14 @@ export class JobManager {
       const newJobs = jobs.filter(job => 
         !this.jobQueue.some(queuedJob => queuedJob.id === job.id)
       );
+
+      // Normalize incoming jobs (status/type defaults)
+      for (const job of newJobs) {
+        if (!job.status) job.status = JobStatus.PENDING;
+        // Normalize type names from backend if needed
+        if (job.type === 'listing_scrape') job.type = 'scrape_listings';
+        if (job.type === 'detail_scrape') job.type = 'scrape_details';
+      }
 
       this.jobQueue.push(...newJobs);
       
@@ -127,6 +170,16 @@ export class JobManager {
         return await this.executeJob(suitableTab.id, nextJob);
       } else {
         logger.debug('No suitable tab found for job execution');
+        // Try to open a new tab if job has a target URL
+        if (nextJob.config?.url) {
+          try {
+            const createdTab = await new Promise(resolve => chrome.tabs.create({ url: nextJob.config.url }, resolve));
+            logger.info('Opened new tab for job execution', { tabId: createdTab?.id, url: nextJob.config.url });
+            // handleTabUpdate will catch when the tab completes and trigger execution
+          } catch (e) {
+            logger.warn('Failed to open tab for job execution:', e?.message || e);
+          }
+        }
         return false;
       }
 
@@ -175,30 +228,21 @@ export class JobManager {
       // Update queue
       await this.updateJobQueue();
 
-      // Send job to content script
-      const response = await chrome.tabs.sendMessage(tabId, {
-        type: MessageTypes.EXECUTE_JOB,
-        payload: {
-          job: job,
-          timestamp: Date.now()
-        }
-      });
-
-      if (response && response.success) {
-        logger.logJobEvent(job.id, 'execution started successfully');
+      const delivered = await this.sendExecuteMessage(tabId, job);
+      if (delivered) {
+        logger.logJobEvent(job.id, 'execution start message delivered');
         return true;
       } else {
-        throw new Error(response?.error || 'Failed to start job execution');
+        // Leave job as RUNNING, try again on next suitable event
+        logger.warn(`Execution message not delivered; will retry later for job ${job.id}`);
+        return false;
       }
 
     } catch (error) {
       logger.error(`Failed to execute job ${job.id}:`, error);
+      // Do not mark as failed due to transient messaging issues
+      // Keep job in queue/run state and let next events retry
       
-      // Mark job as failed
-      if (this.currentJob && this.currentJob.id === job.id) {
-        await this.handleJobFailure(job, error.message);
-      }
-
       return false;
     }
   }
@@ -300,7 +344,8 @@ export class JobManager {
    */
   async submitJobResult(result) {
     try {
-      const response = await this.apiClient.submitJobResult(result);
+      const pruned = this.pruneResultForSubmission(result);
+      const response = await this.apiClient.submitJobResult(pruned);
       logger.info(`Job result submitted successfully: ${result.jobId}`);
       return response;
 
@@ -311,6 +356,28 @@ export class JobManager {
       await this.storeFailedResult(result, error.message);
       
       throw error;
+    }
+  }
+
+  /**
+   * Keep only required fields to reduce payload size
+   */
+  pruneResultForSubmission(result) {
+    try {
+      const keepItem = (item) => ({
+        phone: item?.contact?.phone || '',
+        name: item?.contact?.name || '',
+        from: item?.from || '',
+        address: item?.address || item?.location || '',
+        title: item?.title || '',
+        price: item?.price ?? '',
+        date: item?.date || '',
+        url: item?.url || ''
+      });
+      const data = Array.isArray(result.data) ? result.data.map(keepItem) : [];
+      return { ...result, data };
+    } catch {
+      return result;
     }
   }
 

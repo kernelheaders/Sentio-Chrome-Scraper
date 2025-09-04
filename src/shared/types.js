@@ -34,7 +34,18 @@ export const MessageTypes = {
   // Service Worker → Popup
   STATUS_UPDATE: 'status_update',
   API_KEY_VALIDATED: 'api_key_validated',
-  API_KEY_INVALID: 'api_key_invalid'
+  API_KEY_INVALID: 'api_key_invalid',
+
+  // Popup ↔ Service Worker (CSV/export)
+  GET_LAST_RESULT: 'get_last_result',
+
+  // Dev helper
+  GET_DEV_KEY: 'get_dev_key',
+
+  // Blocking / rate limit
+  GET_BLOCK_STATUS: 'get_block_status',
+  RESUME_AFTER_BLOCK: 'resume_after_block',
+  BLOCK_DETECTED: 'block_detected'
 };
 
 // Extension States
@@ -80,7 +91,10 @@ export const CONFIG = {
     API_KEY: 'sentio_api_key',
     LAST_POLL: 'last_poll_time',
     EXTENSION_STATE: 'extension_state',
-    JOB_QUEUE: 'job_queue'
+    JOB_QUEUE: 'job_queue',
+    LAST_RESULT: 'last_job_result',
+    DETAIL_PROGRESS: 'detail_progress',
+    BLOCKED_UNTIL: 'blocked_until'
   }
 };
 

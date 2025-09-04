@@ -20,7 +20,8 @@ export const isDevelopment = () => {
 // Get API base URL based on environment
 export const getApiBaseUrl = () => {
   if (isDevelopment()) {
-    return 'http://localhost:3001/v1';
+    // Prefer IPv4 localhost to avoid IPv6/host resolution issues in some setups
+    return 'http://127.0.0.1:3001/v1';
   }
   return 'https://api.sentio.com/v1';
 };
@@ -28,6 +29,7 @@ export const getApiBaseUrl = () => {
 // Get development API key for testing
 export const getDevApiKey = () => {
   if (isDevelopment()) {
+    // Match mock-server's valid API key so all endpoints accept it
     return 'test_api_key_12345678901234567890123456';
   }
   return null;

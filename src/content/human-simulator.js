@@ -182,6 +182,28 @@ export class HumanSimulator {
   }
 
   /**
+   * Simulate wheel-based scrolling with natural deltas
+   */
+  async wheelScrollPage(totalDistance = null) {
+    try {
+      const distance = totalDistance || (200 + Math.random() * 600);
+      let remaining = distance;
+      while (remaining > 0) {
+        const step = Math.min(remaining, 50 + Math.random() * 150);
+        const evt = new WheelEvent('wheel', { deltaY: step, bubbles: true, cancelable: true });
+        window.dispatchEvent(evt);
+        window.scrollBy(0, step);
+        remaining -= step;
+        await this.randomDelay(20, 80);
+      }
+      // Pause
+      await this.randomDelay(300, 900);
+    } catch (error) {
+      logger.error('Failed to wheel scroll:', error);
+    }
+  }
+
+  /**
    * Scroll element into view with human-like behavior
    */
   async scrollIntoView(element) {

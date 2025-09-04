@@ -45,6 +45,9 @@
                                 👁️
                             </button>
                         </div>
+                        <div class="dev-helper">
+                            <button type="button" id="useTestKeyButton" class="use-test-key">Use Test Key</button>
+                        </div>
                         
                         <button type="submit" id="submitApiKey" class="submit-button">
                             <span class="button-text">Connect</span>
@@ -65,7 +68,7 @@
 
             <!-- Authorized State -->
             <div id="authorizedState" class="state-panel" style="display: none;">
-                <div class="state-content">
+              <div class="state-content">
                     <div class="connection-status">
                         <div class="connection-info">
                             <span class="connection-label">Connected</span>
@@ -102,8 +105,32 @@
                         <button id="openDashboardButton" class="action-button">
                             📊 Open Dashboard
                         </button>
+                        <button id="resumeBlockButton" class="action-button" title="Resume after backoff" style="display:none;">
+                            🟢 Resume
+                        </button>
                     </div>
-                </div>
+
+                  <!-- Export CSV (compact dropdown) -->
+                  <div class="export-section">
+                      <button id="exportCsvButton" class="export-button" title="Export last result as CSV">⬇️ Export CSV</button>
+                      <div id="exportMenu" class="export-menu" style="display: none;">
+                          <div class="export-title">Fields</div>
+                          <div class="export-fields">
+                              <label><input type="checkbox" data-field="phone" checked> P • Phone</label>
+                              <label><input type="checkbox" data-field="name" checked> N • Name</label>
+                              <label><input type="checkbox" data-field="from" checked> F • From</label>
+                              <label><input type="checkbox" data-field="address" checked> A • Address</label>
+                              <label><input type="checkbox" data-field="title"> T • Title</label>
+                              <label><input type="checkbox" data-field="price"> Pr • Price</label>
+                              <label><input type="checkbox" data-field="date"> D • Date</label>
+                              <label><input type="checkbox" data-field="url"> U • URL</label>
+                          </div>
+                          <div class="export-actions">
+                              <button id="exportApplyButton" class="export-apply">Export</button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
             </div>
 
             <!-- Error State -->
@@ -144,6 +171,6 @@
         <div class="context-item" id="clearStorage">Clear All Data</div>
     </div>
 
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
 </body>
 </html>

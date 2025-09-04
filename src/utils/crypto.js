@@ -1,28 +1,71 @@
 /**
  * Cryptographic utilities for secure API key handling and request signing
  */
-import CryptoJS from 'crypto-js';
+// Lightweight crypto utilities built on Web Crypto API
+
+const subtle = globalThis.crypto?.subtle;
+
+function utf8(str) { return new TextEncoder().encode(str); }
+function hexFromBuf(buf) {
+  const b = new Uint8Array(buf);
+  let h = '';
+  for (let i = 0; i < b.length; i++) h += b[i].toString(16).padStart(2, '0');
+  return h;
+}
+function bufFromHex(hex) {
+  const a = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < a.length; i++) a[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return a.buffer;
+}
+function b64(bytes) {
+  if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function b64ToBytes(str) {
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 /**
  * Encryption key derivation from browser fingerprint
  */
 async function getBrowserFingerprint() {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.textBaseline = 'top';
-  ctx.font = '14px Arial';
-  ctx.fillText('Browser fingerprint', 2, 2);
-  
-  const fingerprint = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + 'x' + screen.height,
-    new Date().getTimezoneOffset(),
-    canvas.toDataURL()
+  try {
+    // Use DOM-based fingerprint when document is available (content scripts)
+    if (typeof document !== 'undefined' && document.createElement) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('Browser fingerprint', 2, 2);
+
+      const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        (typeof screen !== 'undefined') ? (screen.width + 'x' + screen.height) : 'noscreen',
+        new Date().getTimezoneOffset(),
+        canvas.toDataURL()
+      ].join('|');
+
+      const digest = await subtle.digest('SHA-256', utf8(fingerprint));
+      return hexFromBuf(digest);
+    }
+  } catch (_) {
+    // Fall through to service worker path
+  }
+
+  // Service worker or non-DOM context: build a stable key without canvas
+  const base = [
+    navigator.userAgent || 'unknown',
+    (typeof location !== 'undefined' && location.origin) ? location.origin : 'sw',
+    'sentio-sw'
   ].join('|');
-  
-  // Hash the fingerprint to create a stable encryption key
-  return CryptoJS.SHA256(fingerprint).toString();
+  const digest = await subtle.digest('SHA-256', utf8(base));
+  return hexFromBuf(digest);
 }
 
 /**
@@ -30,9 +73,13 @@ async function getBrowserFingerprint() {
  */
 export async function encryptApiKey(apiKey) {
   try {
-    const key = await getBrowserFingerprint();
-    const encrypted = CryptoJS.AES.encrypt(apiKey, key).toString();
-    return encrypted;
+    const fpHex = await getBrowserFingerprint();
+    const keyBytes = new Uint8Array(bufFromHex(fpHex));
+    const key = await subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, key, utf8(apiKey));
+    // v1|base64(iv)|base64(ct)
+    return `v1|${b64(iv)}|${b64(ct)}`;
   } catch (error) {
     console.error('Encryption failed:', error);
     throw new Error('Failed to encrypt API key');
@@ -44,15 +91,19 @@ export async function encryptApiKey(apiKey) {
  */
 export async function decryptApiKey(encryptedKey) {
   try {
-    const key = await getBrowserFingerprint();
-    const bytes = CryptoJS.AES.decrypt(encryptedKey, key);
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    
-    if (!decrypted) {
-      throw new Error('Invalid encrypted key');
+    // Support legacy plain format or new v1|iv|ct
+    if (!encryptedKey.startsWith('v1|')) {
+      // Backward-compat not possible without CryptoJS; treat as invalid
+      throw new Error('Unsupported key format');
     }
-    
-    return decrypted;
+    const [, ivB64, ctB64] = encryptedKey.split('|');
+    const fpHex = await getBrowserFingerprint();
+    const keyBytes = new Uint8Array(bufFromHex(fpHex));
+    const key = await subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+    const iv = b64ToBytes(ivB64);
+    const ct = b64ToBytes(ctB64);
+    const pt = await subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    return new TextDecoder().decode(pt);
   } catch (error) {
     console.error('Decryption failed:', error);
     throw new Error('Failed to decrypt API key');
@@ -62,15 +113,16 @@ export async function decryptApiKey(encryptedKey) {
 /**
  * Generate HMAC signature for API requests
  */
-export function signRequest(method, url, body, apiKey, timestamp) {
+export async function signRequest(method, url, body, apiKey, timestamp) {
   const message = [
     method.toUpperCase(),
     url,
     body ? JSON.stringify(body) : '',
     timestamp.toString()
   ].join('\n');
-  
-  return CryptoJS.HmacSHA256(message, apiKey).toString();
+  const key = await subtle.importKey('raw', utf8(apiKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await subtle.sign('HMAC', key, utf8(message));
+  return hexFromBuf(sig);
 }
 
 /**
@@ -123,11 +175,10 @@ export function secureCleanup(sensitiveString) {
 /**
  * Generate request headers with authentication
  */
-export function generateAuthHeaders(apiKey, method, url, body = null) {
+export async function generateAuthHeaders(apiKey, method, url, body = null) {
   const timestamp = Date.now();
   const nonce = generateNonce();
-  const signature = signRequest(method, url, body, apiKey, timestamp);
-  
+  const signature = await signRequest(method, url, body, apiKey, timestamp);
   return {
     'Authorization': `Bearer ${apiKey}`,
     'X-Signature': signature,
@@ -140,7 +191,9 @@ export function generateAuthHeaders(apiKey, method, url, body = null) {
 /**
  * Verify response signature (if server provides one)
  */
-export function verifyResponseSignature(responseBody, signature, apiKey, timestamp) {
-  const expectedSignature = CryptoJS.HmacSHA256(responseBody + timestamp, apiKey).toString();
-  return expectedSignature === signature;
+export async function verifyResponseSignature(responseBody, signature, apiKey, timestamp) {
+  const key = await subtle.importKey('raw', utf8(apiKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await subtle.sign('HMAC', key, utf8(responseBody + timestamp));
+  const expected = hexFromBuf(sig);
+  return expected === signature;
 }

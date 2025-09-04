@@ -12,9 +12,10 @@ const LOG_LEVELS = {
 
 class Logger {
   constructor() {
-    // In production, only allow ERROR level
-    this.currentLevel = process.env.NODE_ENV === 'production' ? LOG_LEVELS.ERROR : LOG_LEVELS.DEBUG;
-    this.isDevelopment = process.env.NODE_ENV === 'development';
+    // Detect environment safely in browser/extension contexts
+    const env = (typeof process !== 'undefined' && process?.env?.NODE_ENV) || 'development';
+    this.currentLevel = env === 'production' ? LOG_LEVELS.ERROR : LOG_LEVELS.DEBUG;
+    this.isDevelopment = env !== 'production';
   }
 
   /**
@@ -25,7 +26,7 @@ class Logger {
     const prefix = `[Sentio Extension] ${timestamp} [${level}]`;
     
     if (context) {
-      return `${prefix} ${message}`, context;
+      return [`${prefix} ${message}`, context];
     }
     
     return `${prefix} ${message}`;

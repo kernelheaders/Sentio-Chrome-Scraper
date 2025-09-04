@@ -21,16 +21,22 @@ export class AuthManager {
    * Get API key for development mode
    */
   async ensureDevApiKey() {
-    if (config.isDevelopment && config.devApiKey) {
-      const hasApiKey = await secureStorage.hasApiKey();
-      
-      if (!hasApiKey) {
+    if (!(config.isDevelopment && config.devApiKey)) return null;
+    try {
+      const existing = await secureStorage.getApiKey();
+      if (!existing) {
         logger.info('Auto-setting development API key');
         await secureStorage.setApiKey(config.devApiKey);
         return config.devApiKey;
       }
+      return existing;
+    } catch (_) {
+      // On any error, seed dev key
+      try {
+        await secureStorage.setApiKey(config.devApiKey);
+        return config.devApiKey;
+      } catch (_) { return null; }
     }
-    return null;
   }
 
   /**
@@ -38,7 +44,15 @@ export class AuthManager {
    */
   async validateApiKey(apiKey) {
     try {
-      // Check format first
+      // In development, accept configured dev key without local format check
+      if (config.isDevelopment && config.devApiKey && apiKey === config.devApiKey) {
+        this.isAuthenticated = true;
+        this.lastValidation = Date.now();
+        logger.info('Development API key accepted');
+        return true;
+      }
+
+      // Check format first (production or non-dev key)
       const formatValidation = validateApiKey(apiKey);
       if (!formatValidation.isValid) {
         logger.warn('API key format validation failed:', formatValidation.errors);

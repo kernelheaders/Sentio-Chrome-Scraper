@@ -16,7 +16,8 @@
     "zip": "cd build && zip -r ../sentio-extension.zip .",
     "clean": "rm -rf build dist",
     "mock-server": "node mock-server.js",
-    "dev": "concurrently \"npm run mock-server\" \"npm run watch\""
+    "dev": "concurrently \"npm run mock-server\" \"npm run watch\"",
+    "seed:job": "bash scripts/seed_job.sh"
   },
   "devDependencies": {
     "@babel/core": "^7.22.0",

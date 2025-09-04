@@ -18,6 +18,7 @@ const dirs = [
   'build/popup',
   'build/assets',
   'build/assets/icons',
+  'build/vendor',
   'build/src',
   'build/src/popup'
 ];
@@ -58,10 +59,13 @@ const filesToCopy = [
   { from: 'src/utils/validators.js', to: 'build/utils/validators.js' },
   
   { from: 'src/shared/types.js', to: 'build/shared/types.js' },
+
+  // Vendor libs needed at runtime (no bundler)
+  { from: 'node_modules/crypto-js/crypto-js.js', to: 'build/vendor/crypto-js.js' },
   
   // Popup files
-  { from: 'src/popup/popup.html', to: 'build/src/popup/popup.html' },
-  { from: 'src/popup/popup.css', to: 'build/src/popup/popup.css' },
+  { from: 'src/popup/popup.html', to: 'build/popup/popup.html' },
+  { from: 'src/popup/popup.css', to: 'build/popup/popup.css' },
   
   // Assets
   { from: 'assets/icons/logo.png', to: 'build/assets/icons/logo.png' }

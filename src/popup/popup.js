@@ -2,13 +2,14 @@
  * Popup script for Sentio Chrome Extension
  * Handles UI interactions and communication with service worker
  */
-import { MessageTypes, ExtensionState } from '../shared/types.js';
+import { MessageTypes, ExtensionState, CONFIG } from '../shared/types.js';
 
 class SentioPopup {
   constructor() {
     this.currentState = ExtensionState.UNAUTHORIZED;
     this.statusUpdateInterval = null;
     this.toasts = [];
+    this.lastStatus = null;
     
     this.initialize();
   }
@@ -47,6 +48,33 @@ class SentioPopup {
     const toggleButton = document.getElementById('toggleApiKey');
     toggleButton?.addEventListener('click', this.toggleApiKeyVisibility.bind(this));
 
+    // Use Test Key (dev helper)
+    const useTestKeyButton = document.getElementById('useTestKeyButton');
+    useTestKeyButton?.addEventListener('click', async () => {
+      const btn = useTestKeyButton;
+      this.setButtonLoading(btn, true);
+      try {
+        const res = await this.sendMessage(MessageTypes.GET_DEV_KEY);
+        const key = res?.devKey || 'test_api_key_12345678901234567890123456';
+        // Reflect in input for transparency
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        apiKeyInput.value = key;
+        apiKeyInput.type = 'text';
+        // Auto-submit the test key
+        const setRes = await this.sendMessage(MessageTypes.SET_API_KEY, { apiKey: key });
+        if (setRes?.success) {
+          this.showToast('Test key set', 'success');
+          await this.loadStatus();
+        } else {
+          this.showToast('Failed to set test key', 'error');
+        }
+      } catch (e) {
+        this.showToast('Use Test Key failed', 'error');
+      } finally {
+        this.setButtonLoading(btn, false);
+      }
+    });
+
     // Disconnect button
     const disconnectButton = document.getElementById('disconnectButton');
     disconnectButton?.addEventListener('click', this.handleDisconnect.bind(this));
@@ -55,8 +83,24 @@ class SentioPopup {
     const forceRefreshButton = document.getElementById('forceRefreshButton');
     forceRefreshButton?.addEventListener('click', this.handleForceRefresh.bind(this));
 
+    const resumeBlockButton = document.getElementById('resumeBlockButton');
+    resumeBlockButton?.addEventListener('click', async () => {
+      const res = await this.sendMessage(MessageTypes.RESUME_AFTER_BLOCK);
+      if (res?.success) {
+        this.showToast('Resumed after backoff', 'success');
+        await this.loadStatus();
+        this.updateBlockUI(false);
+      }
+    });
+
     const openDashboardButton = document.getElementById('openDashboardButton');
     openDashboardButton?.addEventListener('click', this.handleOpenDashboard.bind(this));
+
+    // Export CSV (compact menu)
+    const exportBtn = document.getElementById('exportCsvButton');
+    exportBtn?.addEventListener('click', this.toggleExportMenu.bind(this));
+    const exportApply = document.getElementById('exportApplyButton');
+    exportApply?.addEventListener('click', this.handleExportCsv.bind(this));
 
     // Error state buttons
     const retryButton = document.getElementById('retryButton');
@@ -105,24 +149,43 @@ class SentioPopup {
       this.setButtonLoading(submitButton, true);
       this.clearInputError(apiKeyInput);
 
-      // Send API key to service worker
-      const response = await this.sendMessage(MessageTypes.SET_API_KEY, { apiKey });
+      // Try with lightweight retry on transient messaging errors
+      const response = await this.trySetApiKey(apiKey, 2);
 
-      if (response.success) {
+      if (response?.success) {
         this.showToast('API key validated successfully', 'success');
         apiKeyInput.value = '';
         await this.loadStatus(); // Refresh status
       } else {
-        throw new Error(response.error || 'Failed to validate API key');
+        const msg = response?.error || 'Failed to validate API key';
+        throw new Error(msg);
       }
 
     } catch (error) {
-      console.error('API key validation failed:', error);
-      this.showInputError(apiKeyInput, error.message);
-      this.showToast('API key validation failed', 'error');
+      // Only show a visible error if it is not a transient port/timeout issue
+      const msg = String(error?.message || error);
+      if (!/No response|message port closed/i.test(msg)) {
+        this.showInputError(apiKeyInput, msg);
+        this.showToast('API key validation failed', 'error');
+      }
     } finally {
       this.setButtonLoading(submitButton, false);
     }
+  }
+
+  /**
+   * Try setting API key with small retry on transient channel errors
+   */
+  async trySetApiKey(apiKey, retries = 1) {
+    const attempt = async () => this.sendMessage(MessageTypes.SET_API_KEY, { apiKey });
+    let res = await attempt();
+    if (res?.success) return res;
+    const msg = String(res?.error || '').toLowerCase();
+    if (retries > 0 && (msg.includes('no response') || msg.includes('message port closed'))) {
+      await new Promise(r => setTimeout(r, 300));
+      return this.trySetApiKey(apiKey, retries - 1);
+    }
+    return res;
   }
 
   /**
@@ -175,22 +238,36 @@ class SentioPopup {
       const button = document.getElementById('forceRefreshButton');
       this.setButtonLoading(button, true);
 
-      const response = await this.sendMessage(MessageTypes.FORCE_POLL);
+      const response = await this.tryForcePoll(2);
 
-      if (response.success) {
+      if (response?.success) {
         this.showToast('Checking for jobs...', 'info');
         await this.loadStatus();
       } else {
-        throw new Error(response.error || 'Failed to check for jobs');
+        throw new Error(response?.error || 'Failed to check for jobs');
       }
 
     } catch (error) {
-      console.error('Force refresh failed:', error);
-      this.showToast('Failed to check for jobs', 'error');
+      const msg = String(error?.message || error);
+      if (!/No response|message port closed/i.test(msg)) {
+        console.warn('Force refresh failed:', msg);
+        this.showToast('Failed to check for jobs', 'error');
+      }
     } finally {
       const button = document.getElementById('forceRefreshButton');
       this.setButtonLoading(button, false);
     }
+  }
+
+  async tryForcePoll(retries = 1) {
+    const res = await this.sendMessage(MessageTypes.FORCE_POLL);
+    if (res?.success) return res;
+    const msg = String(res?.error || '').toLowerCase();
+    if (retries > 0 && (msg.includes('no response') || msg.includes('message port closed'))) {
+      await new Promise(r => setTimeout(r, 300));
+      return this.tryForcePoll(retries - 1);
+    }
+    return res;
   }
 
   /**
@@ -198,6 +275,132 @@ class SentioPopup {
    */
   handleOpenDashboard() {
     chrome.tabs.create({ url: 'https://app.sentio.com/dashboard' });
+  }
+
+  /**
+   * Toggle export dropdown visibility
+   */
+  toggleExportMenu() {
+    const menu = document.getElementById('exportMenu');
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+
+  /**
+   * Handle CSV export with selected fields
+   */
+  async handleExportCsv() {
+    try {
+      const menu = document.getElementById('exportMenu');
+      const checkboxes = menu?.querySelectorAll('input[type="checkbox"][data-field]') || [];
+      const fields = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.getAttribute('data-field'));
+
+      if (fields.length === 0) {
+        this.showToast('Select at least one field', 'warning');
+        return;
+      }
+
+      let response = await this.sendMessage(MessageTypes.GET_LAST_RESULT);
+      let result = response?.result;
+
+      if (!result || !Array.isArray(result.data) || result.data.length === 0) {
+        // Fallback: read directly from storage in case SW missed the event
+        try {
+          result = await new Promise((resolve) => {
+            chrome.storage.local.get([CONFIG.STORAGE_KEYS.LAST_RESULT], (r) => {
+              resolve(r[CONFIG.STORAGE_KEYS.LAST_RESULT] || null);
+            });
+          });
+        } catch (_) {}
+      }
+
+      if (!result || !Array.isArray(result.data) || result.data.length === 0) {
+        this.showToast('No recent results to export', 'warning');
+        return;
+      }
+
+      const csv = this.buildCsv(fields, result.data);
+      this.downloadCsv(csv, 'sentio-results.csv');
+      this.showToast('CSV exported', 'success');
+      this.toggleExportMenu();
+    } catch (error) {
+      console.error('CSV export failed:', error);
+      this.showToast('Failed to export CSV', 'error');
+    }
+  }
+
+  /**
+   * Build CSV string from data and selected fields
+   */
+  buildCsv(fields, rows) {
+    const headers = fields.map(f => this.prettyFieldName(f));
+    const normPhone = (s) => String(s || '').replace(/[^\d+]/g, '');
+    const escape = (val) => {
+      if (val === null || val === undefined) return '';
+      const s = String(val);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const lines = [];
+    lines.push(headers.join(','));
+    for (const item of rows) {
+      const values = fields.map(f => {
+        let v = this.getFieldValue(item, f);
+        if (f === 'phone') v = normPhone(v);
+        return escape(v);
+      });
+      lines.push(values.join(','));
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Map selected field to item property
+   */
+  getFieldValue(item, field) {
+    switch (field) {
+      case 'phone': return item.contact?.phone || '';
+      case 'name': return item.contact?.name || '';
+      case 'from': return item.from || '';
+      case 'location':
+      case 'address': return item.address || item.location || '';
+      case 'title': return item.title || '';
+      case 'price': return item.price ?? '';
+      case 'date': return item.date || '';
+      case 'url': return item.url || '';
+      default: return '';
+    }
+  }
+
+  prettyFieldName(f) {
+    const map = {
+      phone: 'Phone',
+      name: 'Name',
+      from: 'From',
+      title: 'Title',
+      price: 'Price',
+      location: 'Address',
+      address: 'Address',
+      date: 'Date',
+      url: 'URL'
+    };
+    return map[f] || f;
+  }
+
+  /**
+   * Trigger CSV file download
+   */
+  downloadCsv(csvText, filename) {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   /**
@@ -228,9 +431,19 @@ class SentioPopup {
    */
   async sendMessage(type, payload = {}) {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type, payload }, (response) => {
-        resolve(response || { success: false, error: 'No response' });
-      });
+      try {
+        chrome.runtime.sendMessage({ type, payload }, (response) => {
+          // Read lastError to prevent Unchecked runtime.lastError noise
+          const err = chrome.runtime.lastError;
+          if (err) {
+            // Resolve gracefully; caller may fallback to last known status
+            return resolve({ success: false, error: err.message || 'No response' });
+          }
+          resolve(response || { success: false, error: 'No response' });
+        });
+      } catch (e) {
+        resolve({ success: false, error: e?.message || 'sendMessage failed' });
+      }
     });
   }
 
@@ -241,15 +454,20 @@ class SentioPopup {
     try {
       const response = await this.sendMessage(MessageTypes.GET_STATUS);
       
-      if (response.success !== false) {
+      // GET_STATUS returns a plain object (no success flag) on success.
+      if (response && response.success !== false) {
+        this.lastStatus = response;
         this.updateStatus(response);
       } else {
-        throw new Error(response.error || 'Failed to get status');
+        // Transient failure: keep last known status; avoid flipping to error panel
+        if (this.lastStatus) {
+          this.updateStatus(this.lastStatus);
+        }
       }
 
-    } catch (error) {
-      console.error('Failed to load status:', error);
-      this.updateStatus({ state: ExtensionState.ERROR });
+    } catch (_error) {
+      // Swallow transient errors silently to avoid user-visible flicker
+      if (this.lastStatus) this.updateStatus(this.lastStatus);
     }
   }
 
@@ -279,6 +497,40 @@ class SentioPopup {
       // Update authorized state UI
       this.updateAuthorizedUI(status);
     }
+
+    if (state === ExtensionState.UNAUTHORIZED) {
+      this.prefillDevKey();
+    }
+
+    // Check block status to toggle Resume button
+    this.updateBlockStateAsync();
+  }
+
+  async updateBlockStateAsync() {
+    try {
+      const res = await this.sendMessage(MessageTypes.GET_BLOCK_STATUS);
+      const blocked = res?.blockedUntil && Date.now() < res.blockedUntil;
+      this.updateBlockUI(!!blocked);
+    } catch (_) {}
+  }
+
+  updateBlockUI(isBlocked) {
+    const btn = document.getElementById('resumeBlockButton');
+    const checkBtn = document.getElementById('forceRefreshButton');
+    if (!btn || !checkBtn) return;
+    btn.style.display = isBlocked ? 'block' : 'none';
+    checkBtn.disabled = isBlocked;
+  }
+
+  async prefillDevKey() {
+    try {
+      const res = await this.sendMessage(MessageTypes.GET_DEV_KEY);
+      const key = res?.devKey;
+      if (key) {
+        const input = document.getElementById('apiKeyInput');
+        if (input && !input.value) input.value = key;
+      }
+    } catch (_) {}
   }
 
   /**

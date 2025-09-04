@@ -8,6 +8,7 @@ import { ApiClient } from './api-client.js';
 import { JobManager } from './job-manager.js';
 import { AuthManager } from './auth-manager.js';
 import { MessageTypes, ExtensionState, CONFIG } from '../shared/types.js';
+import { config } from '../utils/config.js';
 
 class ServiceWorker {
   constructor() {
@@ -17,7 +18,8 @@ class ServiceWorker {
     this.currentState = ExtensionState.UNAUTHORIZED;
     this.pollingAlarm = 'sentio_polling';
     this.healthCheckAlarm = 'sentio_health_check';
-    
+    this.submittedResults = new Set();
+    this.blockedUntil = 0;
     this.initialize();
   }
 
@@ -33,16 +35,44 @@ class ServiceWorker {
       
       // Restore previous state
       await this.restoreState();
+      try { this.blockedUntil = await secureStorage.getBlockedUntil(); } catch (_) {}
+
+      // Seed development API key for easier testing
+      try {
+        await this.authManager.ensureDevApiKey();
+      } catch (e) {
+        logger.debug('Dev API key seeding skipped:', e?.message || e);
+      }
       
       // Validate existing API key if present
       if (await secureStorage.hasApiKey()) {
         await this.validateApiKey();
       }
+
+      // Warm up API connection and attempt an immediate poll
+      await this.warmupApi();
+      await this.pollForJobs();
       
       logger.info('Service worker initialized successfully');
     } catch (error) {
       logger.error('Service worker initialization failed:', error);
       await this.setState(ExtensionState.ERROR);
+    }
+  }
+
+  /**
+   * Warm up API connection (health check)
+   */
+  async warmupApi() {
+    try {
+      const healthy = await this.apiClient.checkHealth();
+      if (healthy) {
+        logger.info('API health check: healthy');
+      } else {
+        logger.warn('API health check: unhealthy');
+      }
+    } catch (e) {
+      logger.warn('API health check failed:', e?.message || e);
     }
   }
 
@@ -65,6 +95,16 @@ class ServiceWorker {
     
     // Handle extension suspension
     chrome.runtime.onSuspend.addListener(this.handleSuspend.bind(this));
+
+    // Detect 429 rate limits on target domain
+    try {
+      chrome.webRequest.onCompleted.addListener(
+        this.handleWebRequestCompleted.bind(this),
+        { urls: ['https://www.sahibinden.com/*','https://*.sahibinden.com/*'], types: ['main_frame','sub_frame','xmlhttprequest'] }
+      );
+    } catch (e) {
+      logger.debug('webRequest listener not attached:', e?.message || e);
+    }
   }
 
   /**
@@ -118,8 +158,41 @@ class ServiceWorker {
           break;
           
         case MessageTypes.FORCE_POLL:
-          await this.pollForJobs();
+          await this.pollForJobs(true); // force polling regardless of current state
           sendResponse({ success: true });
+          break;
+        
+        case MessageTypes.GET_LAST_RESULT:
+          try {
+            const last = await secureStorage.getLastResult();
+            sendResponse({ success: true, result: last });
+          } catch (e) {
+            sendResponse({ success: false, error: e?.message || 'Failed to get last result' });
+          }
+          break;
+
+        case MessageTypes.GET_BLOCK_STATUS:
+          sendResponse({ success: true, blockedUntil: this.blockedUntil });
+          break;
+
+        case MessageTypes.RESUME_AFTER_BLOCK:
+          await this.clearBlock();
+          sendResponse({ success: true });
+          break;
+
+        case MessageTypes.BLOCK_DETECTED:
+          logger.logSecurityEvent('Block detected by content script', message.payload || {});
+          await this.enterBlock();
+          sendResponse({ success: true });
+          break;
+
+        case MessageTypes.GET_DEV_KEY:
+          try {
+            const devKey = config?.isDevelopment ? config.devApiKey : null;
+            sendResponse({ success: true, devKey });
+          } catch (e) {
+            sendResponse({ success: false, error: e?.message || 'Failed to get dev key' });
+          }
           break;
           
         case MessageTypes.JOB_STARTED:
@@ -186,7 +259,11 @@ class ServiceWorker {
     }
 
     // Check if this is a Sahibinden page and we have pending jobs
-    if (tab.url.includes('sahibinden.com') && this.currentState === ExtensionState.IDLE) {
+    if (this.isBlocked()) {
+      logger.warn('Execution skipped due to rate limit block');
+      return;
+    }
+    if (tab.url.includes('sahibinden.com') && this.currentState !== ExtensionState.EXECUTING) {
       const pendingJobs = await this.jobManager.getPendingJobs();
       if (pendingJobs.length > 0) {
         logger.info('Sahibinden page detected with pending jobs, checking for execution');
@@ -209,7 +286,8 @@ class ServiceWorker {
    */
   async handleSetApiKey(apiKey) {
     try {
-      await this.setState(ExtensionState.IDLE);
+      // Pause polling during validation to avoid race conditions
+      await this.stopPolling();
       
       const isValid = await this.authManager.validateApiKey(apiKey);
       
@@ -324,13 +402,20 @@ class ServiceWorker {
   /**
    * Poll for new jobs
    */
-  async pollForJobs() {
-    if (this.currentState !== ExtensionState.IDLE) {
+  async pollForJobs(force = false) {
+    if (this.isBlocked()) {
+      logger.warn('Polling skipped due to rate limit block');
+      return;
+    }
+    if (!force && this.currentState !== ExtensionState.IDLE) {
       return;
     }
 
     try {
-      await this.setState(ExtensionState.POLLING);
+      // Enter polling state only if we were idle; on force keep UI stable
+      if (!force) {
+        await this.setState(ExtensionState.POLLING);
+      }
       
       const jobs = await this.jobManager.fetchPendingJobs();
       
@@ -345,13 +430,18 @@ class ServiceWorker {
       
     } catch (error) {
       logger.error('Polling failed:', error);
-      await this.setState(ExtensionState.ERROR);
+      // Invalid API key → UNAUTHORIZED; diğer durumlarda IDLE'da kal (flicker engelle)
+      if (error.code === 'INVALID_API_KEY') {
+        await secureStorage.clearApiKey();
+        await this.setState(ExtensionState.UNAUTHORIZED);
+      } else {
+        await this.setState(ExtensionState.IDLE);
+      }
       
       // Implement exponential backoff for failed polls
       setTimeout(() => {
-        if (this.currentState === ExtensionState.ERROR) {
-          this.setState(ExtensionState.IDLE);
-        }
+        // Backoff sonra tekrar IDLE'a döneriz, popup'ta hata paneli tetiklemeyiz
+        this.setState(ExtensionState.IDLE);
       }, CONFIG.POLLING_INTERVAL_MIN * 2);
     }
   }
@@ -364,10 +454,15 @@ class ServiceWorker {
       const tabs = await chrome.tabs.query({ url: 'https://www.sahibinden.com/*' });
       
       for (const tab of tabs) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: MessageTypes.HEALTH_CHECK,
-          payload: { timestamp: Date.now() }
-        });
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            type: MessageTypes.HEALTH_CHECK,
+            payload: { timestamp: Date.now() }
+          });
+        } catch (e) {
+          // Content script may not be injected yet; ignore
+          logger.debug(`Health check no receiver in tab ${tab.id}`);
+        }
       }
     } catch (error) {
       logger.error('Health check failed:', error);
@@ -378,24 +473,53 @@ class ServiceWorker {
    * Handle job execution events
    */
   async handleJobStarted(payload) {
+    if (this.isBlocked()) return;
     await this.setState(ExtensionState.EXECUTING);
     logger.logJobEvent(payload.jobId, 'started', payload);
   }
 
   async handleJobCompleted(payload) {
+    // Deduplicate multiple completes for same job
+    if (this.submittedResults.has(payload.jobId)) {
+      logger.debug(`Duplicate job_completed ignored for ${payload.jobId}`);
+      return;
+    }
+
     await this.setState(ExtensionState.IDLE);
     logger.logJobEvent(payload.jobId, 'completed', payload);
-    
-    // Try to execute next job in queue
-    await this.jobManager.tryExecuteNextJob();
+    try { await secureStorage.setLastResult(payload); } catch (e) {
+      logger.warn('Failed to cache last job result for export:', e?.message || e);
+    }
+
+    try {
+      await this.jobManager.handleJobCompletion(payload.jobId, payload);
+      this.submittedResults.add(payload.jobId);
+    } catch (e) {
+      logger.warn('Result submission encountered an issue:', e?.message || e);
+    }
+
+    // Browser notification
+    try {
+      const items = payload?.metadata?.itemsExtracted ?? (payload?.data?.length || 0);
+      chrome.notifications?.create?.(undefined, {
+        type: 'basic',
+        iconUrl: 'assets/icons/logo.png',
+        title: 'Scrape Completed',
+        message: `${items} item(s) extracted and submitted`,
+        priority: 0
+      });
+    } catch (_) {}
   }
 
   async handleJobFailed(payload) {
     await this.setState(ExtensionState.IDLE);
     logger.logJobEvent(payload.jobId, 'failed', payload);
-    
-    // Try to execute next job in queue
-    await this.jobManager.tryExecuteNextJob();
+    // Propagate failure into JobManager for consistent handling
+    try {
+      if (this.jobManager.currentJob && this.jobManager.currentJob.id === payload.jobId) {
+        await this.jobManager.handleJobFailure(this.jobManager.currentJob, payload.error || 'Job failed');
+      }
+    } catch (_) {}
   }
 
   async handleHealthResponse(payload, tabId) {
@@ -469,11 +593,56 @@ class ServiceWorker {
       chrome.runtime.sendMessage({
         type: MessageTypes.STATUS_UPDATE,
         payload: { state: this.currentState }
+      }, () => {
+        // Access lastError to silence Unchecked runtime.lastError
+        const _ = chrome.runtime.lastError; // eslint-disable-line no-unused-vars
       });
     } catch (error) {
-      // Popup might not be open, this is normal
       logger.debug('Failed to notify state change (popup likely closed)');
     }
+  }
+
+  // webRequest handler: detect 429 and enter blocked mode
+  async handleWebRequestCompleted(details) {
+    try {
+      const url = details.url || '';
+      // Treat explicit 429 or well-known challenge URL as block
+      const isHttp429 = details.statusCode === 429;
+      const isChallengeUrl = /https:\/\/secure\.sahibinden\.com\/giris\/iki-asamali-dogrulama/i.test(url) || /type=CHLG/i.test(url);
+      if (isHttp429 || isChallengeUrl) {
+        logger.logSecurityEvent(isHttp429 ? 'HTTP 429 detected; entering backoff' : 'CHLG challenge detected; entering backoff', { url });
+        await this.enterBlock();
+        // Attempt to cancel any running jobs
+        try {
+          const tabs = await chrome.tabs.query({ url: 'https://www.sahibinden.com/*' });
+          for (const t of tabs) {
+            chrome.tabs.sendMessage(t.id, { type: MessageTypes.CANCEL_JOB, payload: {} });
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      logger.debug('handleWebRequestCompleted error:', e?.message || e);
+    }
+  }
+
+  isBlocked() {
+    return this.blockedUntil && Date.now() < this.blockedUntil;
+  }
+
+  async enterBlock() {
+    const minutes = 60 + Math.floor(Math.random() * 61); // 60-120 min
+    this.blockedUntil = Date.now() + minutes * 60000;
+    await secureStorage.setBlockedUntil(this.blockedUntil);
+    await this.stopPolling();
+    await this.setState(ExtensionState.IDLE);
+    logger.warn(`Backoff engaged for ${minutes} minutes`);
+  }
+
+  async clearBlock() {
+    this.blockedUntil = 0;
+    await secureStorage.clearBlockedUntil();
+    await this.startPolling();
+    logger.info('Backoff cleared by user');
   }
 }
 
