@@ -87,8 +87,12 @@ class SentioContentScript {
 
       switch (message.type) {
         case MessageTypes.EXECUTE_JOB:
-          await this.handleExecuteJob(message.payload);
+          // Acknowledge immediately to avoid port timeouts; run async
           sendResponse({ success: true });
+          this.handleExecuteJob(message.payload).catch(e => {
+            const benign = this.isUnloading || this.navigationInProgress || /Extension context invalidated|message port closed/i.test(e?.message || '');
+            if (!benign) logger.error('Async handleExecuteJob failed:', e);
+          });
           break;
 
         case MessageTypes.CANCEL_JOB:
@@ -120,7 +124,13 @@ class SentioContentScript {
   async handleExecuteJob(payload) {
     try {
       if (this.isExecuting) {
-        throw new Error('Another job is already executing');
+        // Ignore duplicate EXECUTE_JOB for the same job silently
+        if (this.currentJob?.id && payload?.job?.id && this.currentJob.id === payload.job.id) {
+          logger.debug('Duplicate EXECUTE_JOB received for current job; ignoring');
+          return;
+        }
+        logger.debug('EXECUTE_JOB received while busy; ignoring new request');
+        return;
       }
 
       if (!payload.job) {
