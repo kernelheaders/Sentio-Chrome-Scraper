@@ -263,7 +263,10 @@ class SentioContentScript {
     await this.persistDetailProgress(progress);
     this.updateHud({ status: 'Processing', progress: 0, total: slice.length });
     if (slice.length > 0) {
-      await this.navigateToUrl(slice[0]);
+      const ok = await this.navigateToUrl(slice[0]);
+      if (!ok) {
+        await this.tryClickFirstDetailFallback(config);
+      }
     } else {
       // Nothing to do
       const result = this.buildResult(job, []);

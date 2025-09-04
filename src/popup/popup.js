@@ -118,6 +118,19 @@ class SentioPopup {
       }
     });
 
+    const debugDumpButton = document.getElementById('debugDumpButton');
+    debugDumpButton?.addEventListener('click', async () => {
+      const r = await this.sendMessage(MessageTypes.GET_DEBUG_STATE);
+      if (r?.success) {
+        const s = r;
+        const msg = `state=${s.state} blocked=${s.blockedUntil ? 'yes' : 'no'} queue=${s.queueSize} hasKey=${s.hasApiKey} lastPoll=${this.formatTime(s.lastPoll)}`;
+        this.showToast(msg, 'info', 5000);
+        console.log('[DebugState]', r);
+      } else {
+        this.showToast('Debug state unavailable', 'warning');
+      }
+    });
+
     // Export CSV (compact menu)
     const exportBtn = document.getElementById('exportCsvButton');
     exportBtn?.addEventListener('click', this.toggleExportMenu.bind(this));
