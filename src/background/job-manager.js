@@ -3,6 +3,7 @@
  * Handles job queuing, execution coordination, and result submission
  */
 import { logger } from '../utils/logger.js';
+import { config } from '../utils/config.js';
 import { secureStorage } from '../utils/storage.js';
 import { validateJob, validateJobResult } from '../utils/validators.js';
 import { MessageTypes, JobStatus, CONFIG, ErrorCodes } from '../shared/types.js';
@@ -173,8 +174,10 @@ export class JobManager {
         // Try to open a new tab if job has a target URL
         if (nextJob.config?.url) {
           try {
-            const createdTab = await new Promise(resolve => chrome.tabs.create({ url: nextJob.config.url }, resolve));
-            logger.info('Opened new tab for job execution', { tabId: createdTab?.id, url: nextJob.config.url });
+            // Open a human-like entry point first (homepage), content script will steer to target
+            const homepage = 'https://www.sahibinden.com/';
+            const createdTab = await new Promise(resolve => chrome.tabs.create({ url: homepage }, resolve));
+            logger.info('Opened homepage tab for job execution', { tabId: createdTab?.id, url: homepage });
             // handleTabUpdate will catch when the tab completes and trigger execution
           } catch (e) {
             logger.warn('Failed to open tab for job execution:', e?.message || e);
