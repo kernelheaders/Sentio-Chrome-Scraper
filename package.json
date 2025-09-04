@@ -17,7 +17,10 @@
     "clean": "rm -rf build dist",
     "mock-server": "node mock-server.js",
     "dev": "concurrently \"npm run mock-server\" \"npm run watch\"",
-    "seed:job": "bash scripts/seed_job.sh"
+    "seed:job": "bash scripts/seed_job.sh",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "e2e:codegen": "playwright codegen"
   },
   "devDependencies": {
     "@babel/core": "^7.22.0",
@@ -31,7 +34,8 @@
     "jest": "^29.5.0",
     "terser-webpack-plugin": "^5.3.0",
     "webpack": "^5.88.0",
-    "webpack-cli": "^5.1.0"
+    "webpack-cli": "^5.1.0",
+    "@playwright/test": "^1.46.0"
   },
   "dependencies": {
     "crypto-js": "^4.1.1"
