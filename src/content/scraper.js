@@ -212,6 +212,13 @@ class SentioContentScript {
     try {
       if (config.url) await this.navigateHomeThen(config.url);
     } catch (_) {}
+
+    // Ensure listing content is present before collecting links
+    try {
+      const listingSel = config.selectors?.listingContainer || '.searchResultsItem';
+      try { await this.waitForContent(listingSel, 20000); }
+      catch { await this.waitForContent('a[href*="/ilan/"]', 20000); }
+    } catch (_) {}
     // Prefer direct URLs if provided, else collect from listing page
     let urls = [];
     try {
@@ -489,8 +496,13 @@ class SentioContentScript {
 
   async collectDetailLinks(config) {
     try {
-      // Ensure listing content present
-      try { await this.waitForContent(config.selectors?.listingContainer || '.searchResultsItem', 15000); } catch (_) {}
+      // Ensure listing content present (with robust fallback)
+      const ensureReady = async () => {
+        try { await this.waitForContent(config.selectors?.listingContainer || '.searchResultsItem', 15000); }
+        catch { await this.waitForContent('a[href*="/ilan/"]', 15000); }
+      };
+      await ensureReady();
+
       const urls = [];
       const sels = [
         config.selectors?.listing,
@@ -499,18 +511,29 @@ class SentioContentScript {
         'a.searchResultsLargeThumbnail',
         'a[href*="/ilan/"]'
       ].filter(Boolean);
-      for (const sel of sels) {
-        try {
-          const nodes = document.querySelectorAll(sel);
-          for (const a of nodes) {
-            const href = a.getAttribute('href');
-            if (!href) continue;
-            let url = href.startsWith('http') ? href : (href.startsWith('/') ? 'https://www.sahibinden.com' + href : 'https://www.sahibinden.com/' + href);
-            if (!urls.includes(url)) urls.push(url);
-          }
-          if (urls.length) break;
-        } catch (_) {}
+      const tryCollect = () => {
+        for (const sel of sels) {
+          try {
+            const nodes = document.querySelectorAll(sel);
+            for (const a of nodes) {
+              const href = a.getAttribute('href');
+              if (!href) continue;
+              let url = href.startsWith('http') ? href : (href.startsWith('/') ? 'https://www.sahibinden.com' + href : 'https://www.sahibinden.com/' + href);
+              if (!urls.includes(url)) urls.push(url);
+            }
+          } catch (_) {}
+        }
+      };
+
+      // Retry a few times with small scrolls to trigger lazy loads
+      for (let i = 0; i < 3 && urls.length === 0; i++) {
+        tryCollect();
+        if (urls.length > 0) break;
+        try { await this.humanSimulator.wheelScrollPage(400 + Math.random()*600); } catch (_) {}
+        try { await this.humanSimulator.randomDelay(300, 800); } catch (_) {}
+        await ensureReady();
       }
+
       if (urls.length === 0) {
         // Fallback: use existing listing extraction
         const pageResults = await this.jobExecutor.extractListingsFromPage(config);

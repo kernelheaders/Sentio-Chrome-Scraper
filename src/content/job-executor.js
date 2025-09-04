@@ -316,7 +316,8 @@ export class JobExecutor {
   async collectDetailLinks(config) {
     try {
       // Ensure listing container is present (best-effort)
-      try { await this.waitForContent(config.selectors?.listingContainer || '.searchResultsItem', 15000); } catch (_) {}
+      try { await this.waitForContent(config.selectors?.listingContainer || '.searchResultsItem', 15000); }
+      catch { await this.waitForContent('a[href*="/ilan/"]', 15000); }
 
       const urls = [];
       const candidateSelectors = [
@@ -327,17 +328,24 @@ export class JobExecutor {
         'a[href*="/ilan/"]'
       ].filter(Boolean);
 
-      for (const sel of candidateSelectors) {
-        try {
-          const nodes = document.querySelectorAll(sel);
-          for (const a of nodes) {
-            const href = a.getAttribute('href');
-            if (!href) continue;
-            let url = href.startsWith('http') ? href : (href.startsWith('/') ? 'https://www.sahibinden.com' + href : 'https://www.sahibinden.com/' + href);
-            if (!urls.includes(url)) urls.push(url);
-          }
-          if (urls.length) break; // stop at first selector that yields links
-        } catch (_) {}
+      const tryCollect = () => {
+        for (const sel of candidateSelectors) {
+          try {
+            const nodes = document.querySelectorAll(sel);
+            for (const a of nodes) {
+              const href = a.getAttribute('href');
+              if (!href) continue;
+              let url = href.startsWith('http') ? href : (href.startsWith('/') ? 'https://www.sahibinden.com' + href : 'https://www.sahibinden.com/' + href);
+              if (!urls.includes(url)) urls.push(url);
+            }
+          } catch (_) {}
+        }
+      };
+      for (let i = 0; i < 3 && urls.length === 0; i++) {
+        tryCollect();
+        if (urls.length > 0) break;
+        try { await this.humanSimulator.wheelScrollPage(400 + Math.random()*600); } catch (_) {}
+        try { await this.humanSimulator.randomDelay(300, 800); } catch (_) {}
       }
 
       if (urls.length === 0) {
