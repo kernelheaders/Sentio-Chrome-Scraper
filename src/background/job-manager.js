@@ -30,6 +30,19 @@ export class JobManager {
       });
       if (!response || response.success !== true) {
         logger.debug(`Execute ACK not received (attempt ${attempt}) for job ${job.id}`);
+        // Attempt to inject content loader and retry
+        if (attempt === 1) {
+          try {
+            await chrome.scripting.executeScript({ target: { tabId }, files: ['content/loader.js'] });
+          } catch (injErr) {
+            logger.debug('Content script injection error:', injErr?.message || injErr);
+          }
+        }
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, delay));
+          return this.sendExecuteMessage(tabId, job, attempt + 1);
+        }
+        return false;
       }
       return true;
     } catch (err) {
@@ -236,8 +249,11 @@ export class JobManager {
         logger.logJobEvent(job.id, 'execution start message delivered');
         return true;
       } else {
-        // Leave job as RUNNING, try again on next suitable event
-        logger.warn(`Execution message not delivered; will retry later for job ${job.id}`);
+        // Could not deliver after retries: mark back to PENDING to allow re-attempts
+        logger.warn(`Execution message not delivered after retries; returning job to queue ${job.id}`);
+        job.status = JobStatus.PENDING;
+        this.currentJob = null;
+        await this.updateJobQueue();
         return false;
       }
 
